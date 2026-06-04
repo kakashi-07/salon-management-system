@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: salon-management-system
+    env: node
+    plan: free
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        value: "1234"
+      - key: VITE_API_URL
+        value: /api
+      - key: DATABASE_URL
+        fromDatabase:
+          name: salon-management-db
+          property: connectionString
+
+databases:
+  - name: salon-management-db
+    plan: free
