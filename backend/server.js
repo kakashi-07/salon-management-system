@@ -12,7 +12,6 @@ import jwt from 'jsonwebtoken'
 import cron from 'node-cron'
 import PDFDocument from 'pdfkit'
 import pg from 'pg'
-import sqlite3 from 'sqlite3'
 import { z } from 'zod'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -34,6 +33,7 @@ let sqliteDb = null
 
 async function getSqliteDb() {
   if (sqliteDb) return sqliteDb
+  const { default: sqlite3 } = await import('sqlite3')
   const dbPath = path.join(__dirname, 'salon.db')
   return new Promise((resolve, reject) => {
     const db = new sqlite3.Database(dbPath, (err) => {
