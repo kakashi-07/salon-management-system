@@ -25,7 +25,9 @@ const pool = useSqlite
   ? null
   : new pg.Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL?.includes('render.com') ? { rejectUnauthorized: false } : false,
+      ssl: (process.env.DATABASE_URL?.includes('render.com') || process.env.DATABASE_URL?.includes('supabase.co'))
+        ? { rejectUnauthorized: false }
+        : false,
     })
 
 let sqliteDb = null

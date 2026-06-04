@@ -12,13 +12,5 @@ services:
         generateValue: true
       - key: ADMIN_PASSWORD
         value: "1234"
-      - key: VITE_API_URL
-        value: /api
       - key: DATABASE_URL
-        fromDatabase:
-          name: salon-management-db
-          property: connectionString
-
-databases:
-  - name: salon-management-db
-    plan: free
+        sync: false
