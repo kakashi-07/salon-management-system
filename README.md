@@ -71,3 +71,4 @@ salon_records (
   updated_at TIMESTAMPTZ NOT NULL
 )
 ```
+# salon-management-system
