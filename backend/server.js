@@ -68,7 +68,7 @@ function sqliteQuery(sql, params = []) {
 
       // Split multi-statement SQL into individual statements and run each
       const isMultiStatement = /;[\s\S]+?\S/.test(translatedSql)
-      const isSelect = /^\s*SELECT/i.test(translatedSql)
+      const isSelect = /^\s*(SELECT|PRAGMA)/i.test(translatedSql)
       const isReturning = /RETURNING/i.test(translatedSql)
 
       if (isMultiStatement && !isSelect && !isReturning) {
@@ -122,6 +122,7 @@ const recordSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   customer_name: z.string().trim().min(1).max(120),
   service: z.string().trim().min(1).max(120),
+  home_service: z.string().trim().max(100).optional().default(''),
   payment_mode: z.enum(['UPI', 'Cash', 'Card']),
   sales_amount: z.coerce.number().positive().max(10000000),
   notes: z.string().trim().max(1000).optional().default(''),
@@ -183,6 +184,7 @@ async function initDatabase() {
       date DATE NOT NULL,
       customer_name TEXT NOT NULL,
       service TEXT NOT NULL,
+      home_service TEXT NOT NULL DEFAULT '',
       payment_mode TEXT NOT NULL CHECK (payment_mode IN ('UPI', 'Cash', 'Card')),
       sales_amount NUMERIC(12, 2) NOT NULL CHECK (sales_amount > 0),
       notes TEXT,
@@ -201,6 +203,23 @@ async function initDatabase() {
       CHECK (id = 1)
     );
   `)
+
+  if (useSqlite) {
+    const tableInfo = await query("PRAGMA table_info(salon_records)")
+    const hasColumn = tableInfo.rows.some((row) => row.name === 'home_service')
+    if (!hasColumn) {
+      await query("ALTER TABLE salon_records ADD COLUMN home_service TEXT NOT NULL DEFAULT ''")
+    }
+  } else {
+    const checkColumn = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='salon_records' AND column_name='home_service'
+    `)
+    if (!checkColumn.rowCount) {
+      await query("ALTER TABLE salon_records ADD COLUMN home_service TEXT NOT NULL DEFAULT ''")
+    }
+  }
 
   await query(`
     INSERT INTO salon_settings (id)
@@ -221,6 +240,7 @@ function normalizeRecord(row) {
     date: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10),
     customer_name: row.customer_name,
     service: row.service,
+    home_service: row.home_service || 'No',
     payment_mode: row.payment_mode,
     sales_amount: Number(row.sales_amount),
     notes: row.notes || '',
@@ -263,10 +283,10 @@ app.get('/api/records', requireAuth, asyncHandler(async (req, res) => {
 app.post('/api/records', requireAuth, asyncHandler(async (req, res) => {
   const input = recordSchema.parse(req.body)
   const result = await query(
-    `INSERT INTO salon_records (date, customer_name, service, payment_mode, sales_amount, notes)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO salon_records (date, customer_name, service, home_service, payment_mode, sales_amount, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [input.date, input.customer_name, input.service, input.payment_mode, input.sales_amount, input.notes],
+    [input.date, input.customer_name, input.service, input.home_service, input.payment_mode, input.sales_amount, input.notes],
   )
   res.status(201).json({ record: normalizeRecord(result.rows[0]) })
 }))
@@ -275,10 +295,10 @@ app.put('/api/records/:id', requireAuth, asyncHandler(async (req, res) => {
   const input = recordSchema.parse(req.body)
   const result = await query(
     `UPDATE salon_records
-     SET date = $1, customer_name = $2, service = $3, payment_mode = $4, sales_amount = $5, notes = $6, updated_at = NOW()
-     WHERE id = $7
+     SET date = $1, customer_name = $2, service = $3, home_service = $4, payment_mode = $5, sales_amount = $6, notes = $7, updated_at = NOW()
+     WHERE id = $8
      RETURNING *`,
-    [input.date, input.customer_name, input.service, input.payment_mode, input.sales_amount, input.notes, req.params.id],
+    [input.date, input.customer_name, input.service, input.home_service, input.payment_mode, input.sales_amount, input.notes, req.params.id],
   )
 
   if (!result.rowCount) return res.status(404).json({ message: 'Record not found' })
@@ -316,6 +336,7 @@ app.post('/api/exports/excel', requireAuth, asyncHandler(async (req, res) => {
     { header: 'Date', key: 'date', width: 14 },
     { header: 'Customer Name', key: 'customer_name', width: 24 },
     { header: 'Service', key: 'service', width: 22 },
+    { header: 'Home Service', key: 'home_service', width: 16 },
     { header: 'Payment Mode', key: 'payment_mode', width: 16 },
     { header: 'Sales Amount', key: 'sales_amount', width: 16 },
     { header: 'Notes', key: 'notes', width: 36 },
@@ -366,7 +387,7 @@ app.post('/api/exports/pdf', requireAuth, asyncHandler(async (req, res) => {
       .font('Helvetica-Bold')
       .fontSize(10)
       .fillColor('#0f172a')
-      .text(`${index + 1}. ${record.date} - ${record.customer_name} - ${record.service}`)
+      .text(`${index + 1}. ${record.date} - ${record.customer_name} - ${record.service}${record.home_service ? ` (Home: ${record.home_service})` : ''}`)
     doc
       .font('Helvetica')
       .fillColor('#475569')
@@ -404,9 +425,9 @@ app.post('/api/restore', requireAuth, asyncHandler(async (req, res) => {
   await query('DELETE FROM salon_records')
   for (const record of payload.records) {
     await query(
-      `INSERT INTO salon_records (date, customer_name, service, payment_mode, sales_amount, notes)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [record.date, record.customer_name, record.service, record.payment_mode, record.sales_amount, record.notes],
+      `INSERT INTO salon_records (date, customer_name, service, home_service, payment_mode, sales_amount, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [record.date, record.customer_name, record.service, record.home_service || 'No', record.payment_mode, record.sales_amount, record.notes],
     )
   }
   if (payload.settings) {

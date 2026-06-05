@@ -40,6 +40,7 @@ const seedRecords = [
     date: today(),
     customer_name: 'Priya',
     service: 'Hair Spa',
+    home_service: '',
     payment_mode: 'UPI',
     sales_amount: 1500,
     notes: 'Membership customer',
@@ -51,6 +52,7 @@ const seedRecords = [
     date: today(),
     customer_name: 'Rahul',
     service: 'Hair Cut',
+    home_service: '',
     payment_mode: 'Cash',
     sales_amount: 300,
     notes: 'Beard trim included',
@@ -62,6 +64,7 @@ const seedRecords = [
     date: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
     customer_name: 'Rakesh',
     service: 'Facial',
+    home_service: '',
     payment_mode: 'Card',
     sales_amount: 900,
     notes: 'Special discount given',
@@ -460,7 +463,7 @@ function Dashboard({ records, settings }) {
 }
 
 function EntryForm({ onSave, editingRecord, onCancel, notify }) {
-  const blank = { date: today(), customer_name: '', service: '', payment_mode: 'UPI', sales_amount: '', notes: '' }
+  const blank = { date: today(), customer_name: '', service: '', home_service: '', payment_mode: 'UPI', sales_amount: '', notes: '' }
   const [form, setForm] = useState(blank)
 
   useEffect(() => {
@@ -468,7 +471,13 @@ function EntryForm({ onSave, editingRecord, onCancel, notify }) {
   }, [editingRecord])
 
   function update(field, value) {
-    setForm((current) => ({ ...current, [field]: value }))
+    setForm((current) => {
+      const next = { ...current, [field]: value }
+      if (field === 'home_service' && value !== '') {
+        next.sales_amount = value
+      }
+      return next
+    })
   }
 
   async function submit(event) {
@@ -504,6 +513,9 @@ function EntryForm({ onSave, editingRecord, onCancel, notify }) {
         </Field>
         <Field label="Service" required>
           <Input value={form.service} onChange={(event) => update('service', event.target.value)} placeholder="Hair Cut" required />
+        </Field>
+        <Field label="Home Service">
+          <Input type="number" min="0" value={form.home_service || ''} onChange={(event) => update('home_service', event.target.value)} placeholder="e.g. 500" />
         </Field>
         <Field label="Mode of Payment" required>
           <Select value={form.payment_mode} onChange={(event) => update('payment_mode', event.target.value)} required>
@@ -553,12 +565,13 @@ function RecordsTable({ records, settings, filters, setFilters, onEdit, onDelete
       .filter((record) => !filters.payment || record.payment_mode === filters.payment)
       .filter((record) => !filters.customer || record.customer_name.toLowerCase().includes(filters.customer.toLowerCase()))
       .filter((record) => !filters.service || record.service.toLowerCase().includes(filters.service.toLowerCase()))
+      .filter((record) => !filters.homeService || String(record.home_service || '').toLowerCase().includes(filters.homeService.toLowerCase()))
       .filter((record) => !filters.min || Number(record.sales_amount) >= Number(filters.min))
       .filter((record) => !filters.max || Number(record.sales_amount) <= Number(filters.max))
       .filter(
         (record) =>
           !search ||
-          [record.customer_name, record.service, record.payment_mode, record.notes].some((value) =>
+          [record.customer_name, record.service, record.home_service, record.payment_mode, record.notes].some((value) =>
             String(value || '').toLowerCase().includes(search),
           ),
       )
@@ -588,6 +601,7 @@ function RecordsTable({ records, settings, filters, setFilters, onEdit, onDelete
     ['date', 'Date'],
     ['customer_name', 'Customer Name'],
     ['service', 'Service'],
+    ['home_service', 'Home Service'],
     ['payment_mode', 'Payment Mode'],
     ['sales_amount', 'Sales Amount'],
   ]
@@ -611,11 +625,12 @@ function RecordsTable({ records, settings, filters, setFilters, onEdit, onDelete
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-8">
+        <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-9">
           <Input type="date" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
           <Input type="date" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
           <Input placeholder="Customer" value={filters.customer} onChange={(event) => setFilters({ ...filters, customer: event.target.value })} />
           <Input placeholder="Service" value={filters.service} onChange={(event) => setFilters({ ...filters, service: event.target.value })} />
+          <Input placeholder="Home Service" value={filters.homeService} onChange={(event) => setFilters({ ...filters, homeService: event.target.value })} />
           <Select value={filters.payment} onChange={(event) => setFilters({ ...filters, payment: event.target.value })}>
             <option value="">All payments</option>
             <option>UPI</option>
@@ -626,7 +641,7 @@ function RecordsTable({ records, settings, filters, setFilters, onEdit, onDelete
           <Input type="number" placeholder="Max amount" value={filters.max} onChange={(event) => setFilters({ ...filters, max: event.target.value })} />
           <Button
             variant="secondary"
-            onClick={() => setFilters({ search: '', from: '', to: '', customer: '', service: '', payment: '', min: '', max: '' })}
+            onClick={() => setFilters({ search: '', from: '', to: '', customer: '', service: '', homeService: '', payment: '', min: '', max: '' })}
           >
             <RefreshCcw className="h-4 w-4" />
             Clear
@@ -655,6 +670,7 @@ function RecordsTable({ records, settings, filters, setFilters, onEdit, onDelete
                 <td className="px-5 py-4 text-slate-700">{record.date}</td>
                 <td className="px-5 py-4 font-semibold text-slate-950">{record.customer_name}</td>
                 <td className="px-5 py-4 text-slate-700">{record.service}</td>
+                <td className="px-5 py-4 text-slate-700">{record.home_service || '-'}</td>
                 <td className="px-5 py-4">
                   <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{record.payment_mode}</span>
                 </td>
@@ -677,7 +693,7 @@ function RecordsTable({ records, settings, filters, setFilters, onEdit, onDelete
             ))}
             {!rows.length && (
               <tr>
-                <td className="px-5 py-12 text-center text-slate-500" colSpan="7">
+                <td className="px-5 py-12 text-center text-slate-500" colSpan="8">
                   No records match the current filters.
                 </td>
               </tr>
@@ -935,9 +951,9 @@ function downloadBlob(blob, filename) {
 }
 
 function exportCsv(records, filename) {
-  const headers = ['Date', 'Customer Name', 'Service', 'Payment Mode', 'Sales Amount', 'Notes']
+  const headers = ['Date', 'Customer Name', 'Service', 'Home Service', 'Payment Mode', 'Sales Amount', 'Notes']
   const lines = records.map((record) =>
-    [record.date, record.customer_name, record.service, record.payment_mode, record.sales_amount, record.notes]
+    [record.date, record.customer_name, record.service, record.home_service || 'No', record.payment_mode, record.sales_amount, record.notes]
       .map((value) => `"${String(value || '').replaceAll('"', '""')}"`)
       .join(','),
   )
@@ -1036,11 +1052,12 @@ function generateClientPdf(records, settings, range) {
   y += 4
 
   const columns = [
-    ['Date', 70],
-    ['Customer', 110],
-    ['Service', 115],
-    ['Pay', 50],
-    ['Amount', 70],
+    ['Date', 65],
+    ['Customer', 95],
+    ['Service', 95],
+    ['Home', 50],
+    ['Pay', 45],
+    ['Amount', 65],
     ['Notes', 96],
   ]
 
@@ -1067,6 +1084,7 @@ function generateClientPdf(records, settings, range) {
       record.date,
       record.customer_name,
       record.service,
+      record.home_service || 'No',
       record.payment_mode,
       currency(record.sales_amount, settings.currency),
       record.notes || '-',
@@ -1097,7 +1115,7 @@ export default function App() {
   const [viewRecord, setViewRecord] = useState(null)
   const [toast, setToast] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [filters, setFilters] = useState({ search: '', from: '', to: '', customer: '', service: '', payment: '', min: '', max: '' })
+  const [filters, setFilters] = useState({ search: '', from: '', to: '', customer: '', service: '', homeService: '', payment: '', min: '', max: '' })
 
   useEffect(() => {
     if (!authenticated) return
@@ -1317,6 +1335,7 @@ export default function App() {
                 ['Date', viewRecord.date],
                 ['Customer Name', viewRecord.customer_name],
                 ['Service', viewRecord.service],
+                ['Home Service', viewRecord.home_service || 'No'],
                 ['Payment Mode', viewRecord.payment_mode],
                 ['Sales Amount', currency(viewRecord.sales_amount, settings.currency)],
                 ['Notes', viewRecord.notes || '-'],
